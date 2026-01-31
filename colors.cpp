@@ -5,9 +5,23 @@
 #define S3 7
 #define sensorOut 8
 
-// Variables for raw frequency and mapped RGB values
-int redFreq, greenFreq, blueFreq;
-int r, g, b;
+// --- COLOR DICTIONARY ---
+// Replace these {R, G, B} values with the ones from your Calibration Script
+struct ColorTarget {
+  const char* name;
+  int r, g, b;
+};
+
+ColorTarget targets[] = {
+  {"WHITE",   252, 251, 251},
+  {"BLACK",   111, 89,  105}, 
+  {"RED",     243, 156, 176}, 
+  {"GREEN",   198, 229, 203}, 
+  {"BLUE",    155, 191, 224}, 
+  {"BROWN",   235, 218, 211}, 
+};
+
+const int numColors = sizeof(targets) / sizeof(targets[0]);
 
 void setup() {
   pinMode(S0, OUTPUT);
@@ -21,87 +35,48 @@ void setup() {
   digitalWrite(S1, LOW);
 
   Serial.begin(9600);
-  Serial.println("--- Color Sensor Ready ---");
+  Serial.println("--- Vector Distance Color Recognition Ready ---");
 }
 
 void loop() {
-  // 1. Read RED frequency
-  digitalWrite(S2, LOW);
-  digitalWrite(S3, LOW);
-  redFreq = pulseIn(sensorOut, LOW);
-  // Map raw values (13 = white/255, 148 = dark/0)
-  r = map(redFreq, 13, 148, 255, 0);
-  r = constrain(r, 0, 255); // Keep within 0-255 range
-  delay(100);
+  // 1. READ AND MAP SENSOR VALUES
+  digitalWrite(S2, LOW); digitalWrite(S3, LOW);
+  int r = constrain(map(pulseIn(sensorOut, LOW), 15, 260, 255, 0), 0, 255);
+  delay(20);
 
-  // 2. Read GREEN frequency
-  digitalWrite(S2, HIGH);
-  digitalWrite(S3, HIGH);
-  greenFreq = pulseIn(sensorOut, LOW);
-  // Map raw values (13 = white/255, 170 = dark/0)
-  g = map(greenFreq, 13, 170, 255, 0);
-  g = constrain(g, 0, 255);
-  delay(100);
+  digitalWrite(S2, HIGH); digitalWrite(S3, HIGH);
+  int g = constrain(map(pulseIn(sensorOut, LOW), 16, 260, 255, 0), 0, 255);
+  delay(20);
 
-  // 3. Read BLUE frequency
-  digitalWrite(S2, LOW);
-  digitalWrite(S3, HIGH);
-  blueFreq = pulseIn(sensorOut, LOW);
-  // Map raw values (13 = white/255, 150 = dark/0)
-  b = map(blueFreq, 13, 150, 255, 0);
-  b = constrain(b, 0, 255);
-  delay(100);
+  digitalWrite(S2, LOW); digitalWrite(S3, HIGH);
+  int b = constrain(map(pulseIn(sensorOut, LOW), 14, 260, 255, 0), 0, 255);
+  delay(20);
 
-  // --- PRINT RGB VALUES ---
-  Serial.print("RGB: (");
+  // 2. FIND THE CLOSEST VECTOR (Euclidean Distance)
+  int closestIndex = 0;
+  long minDistance = 1000000; // Initialize with a very high value
+
+  for (int i = 0; i < numColors; i++) {
+    // We calculate the squared distance: (r1-r2)^2 + (g1-g2)^2 + (b1-b2)^2
+    // It's faster than using sqrt() and gives the same comparison result.
+    long dist = pow(r - targets[i].r, 2) + 
+                pow(g - targets[i].g, 2) + 
+                pow(b - targets[i].b, 2);
+
+    if (dist < minDistance) {
+      minDistance = dist;
+      closestIndex = i;
+    }
+  }
+
+  // 3. PRINT RESULTS
+  Serial.print("Current RGB: (");
   Serial.print(r); Serial.print(", ");
   Serial.print(g); Serial.print(", ");
   Serial.print(b); Serial.print(") ");
 
-  // --- CALIBRATED COLOR GATE ---
+  Serial.print("-> MATCH: ");
+  Serial.println(targets[closestIndex].name);
 
-  // 1. BLACK: Nearly zero light (Your data: 34, 38, 21)
-  if (r < 60 && g < 60 && b < 60) {
-    Serial.println("-> DETECTED: BLACK");
-  }
-
-  // 2. NOTHING: Ambient light/Empty air (Your data: 170, 106, 73)
-  // We catch this specifically so it doesn't get called "Red" or "Brown"
-  else if (r > 150 && r < 185 && g < 120 && b < 90) {
-    Serial.println("-> DETECTED: NOTHING");
-  }
-
-  // 3. WHITE: Full blast (Your data: 250, 250, 250)
-  else if (r > 240 && g > 240 && b > 240) {
-    Serial.println("-> DETECTED: WHITE");
-  }
-
-  // 4. BROWN: Bright but mixed (Your data: 212, 190, 170)
-  // Brown has high Green and Blue compared to pure Red.
-  else if (r > 200 && g > 170 && b > 150) {
-    Serial.println("-> DETECTED: BROWN");
-  }
-
-  // 5. RED: Pure and high (Your data: 238, 124, 140)
-  // Notice Green is MUCH lower here than in Brown.
-  else if (r > 220 && g < 150) {
-    Serial.println("-> DETECTED: RED");
-  }
-
-  // 6. GREEN: (Your data: 130, 212, 150)
-  else if (g > r && g > b) {
-    Serial.println("-> DETECTED: GREEN");
-  }
-
-  // 7. BLUE: (Your data: 75, 152, 200)
-  else if (b > r && b > g) {
-    Serial.println("-> DETECTED: BLUE");
-  }
-
-  else {
-    Serial.println("-> DETECTED: UNKNOWN");
-  }
-
-  delay(500);
+  delay(1000); // Check every 1 second
 }
-
