@@ -1,4 +1,4 @@
-# UTRA-Hacks-2026
+# UTRA-Hacks-2026 - 1st Place Overall @ UTRA Hacks 2026
 
 
 # Color Sensor Diagram
